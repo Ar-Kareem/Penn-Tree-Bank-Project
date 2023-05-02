@@ -6,7 +6,6 @@ import numpy as np
 import torch
 
 try:
-    import testsetsetset
     import wandb
 except ImportError:
     wandb = type('wandb', (object,), {'log': lambda *args, **kwargs: None, 'init': lambda *args, **kwargs: None})
