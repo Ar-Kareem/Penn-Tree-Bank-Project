@@ -34,9 +34,10 @@ def sbert_encode(model, tokenizer, inp_sentences):
         embeddings = outputs.last_hidden_state.detach()  # torch.Size([batch, 128, 768])
     return embeddings, tokens['attention_mask']
 
-def sbert_encode_batched(model, tokenizer, inp_sentences, batch_size):
+def sbert_encode_batched(model, tokenizer, inp_sentences, batch_size, verbose=True):
     embeds, attn_masks = [], []
-    for i in tqdm(range(0, len(inp_sentences), batch_size)):
+    pbar = tqdm if verbose else lambda x: x
+    for i in pbar(range(0, len(inp_sentences), batch_size)):
         x = inp_sentences[i:i+batch_size]
         embed, attn_mask = sbert_encode(model, tokenizer, x)
         embeds.append(embed.cpu())
@@ -69,9 +70,10 @@ def __get_s1_to_s2(s1, s2):
     assert i == len(s1) and j == len(s2)
     return s1_to_s2
 
-def pool_tokens(data, embeds, attn_masks, tokenizer):
+def pool_tokens(data, embeds, attn_masks, tokenizer, verbose=True):
     result = []
-    for data_i in tqdm(range(len(data))):
+    pbar = tqdm if verbose else lambda x: x
+    for data_i in pbar(range(len(data))):
         s1 = data[data_i]
         s2 = tokenizer.convert_ids_to_tokens(tokenizer.encode_plus(' '.join(data[data_i]))['input_ids'])[1:-1]
         s1_to_s2 = __get_s1_to_s2(s1, s2)
@@ -122,10 +124,11 @@ def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True,
 
     loss = np.mean(metrics["losses"])
     acc = 100*metrics["acc_correct"]/metrics["total"]
-    if is_train:
-        wandb.log({"train_loss": loss, "train_acc": acc})
-    else:
-        wandb.log({"val_loss": loss, "val_acc": acc})
+    if wandb.run is not None:
+        if is_train:
+            wandb.log({"train_loss": loss, "train_acc": acc})
+        else:
+            wandb.log({"val_loss": loss, "val_acc": acc})
     return acc
 
 class ListDataset(torch.utils.data.Dataset):
@@ -150,6 +153,8 @@ class SimpleModel(torch.nn.Module):
     def __init__(self, model_config):
         super(SimpleModel, self).__init__()
         self.model_config = model_config
+        if 'dropout' in model_config and model_config['dropout'] > 0:
+            self.dropout = torch.nn.Dropout(p=model_config['dropout'])
         if 'hidden_dims' in model_config:
             self.hidden_dims = [model_config['input_dim']] + model_config['hidden_dims'] + [model_config['output_dim']]
             self.layers = torch.nn.ModuleList([torch.nn.Linear(self.hidden_dims[i-1], self.hidden_dims[i]) for i in range(1, len(self.hidden_dims))])
@@ -205,8 +210,9 @@ def train_pipeline(args):
     print('Preparing model')
     model_config = {
         'input_dim': 768, 
-        'hidden_dims': [256],
-        'output_dim': len(data['all_pos'])
+        # 'hidden_dims': [256],
+        'output_dim': len(data['all_pos']),
+        # 'dropout': 0.5,
     }
     model = SimpleModel(model_config).to(device)
     param_count = sum([p.numel() for n,p in model.named_parameters()])
@@ -235,16 +241,63 @@ def train_pipeline(args):
             print('---saved best model---')
         cur_epoch += 1
 
+def inference_pipeline(args):
+    device = args.device
+    new_samples = args.new_samples
+
+    input_from_cmd = new_samples is None
+    sentances = new_samples.split(',') if new_samples else []
+
+    import dataset
+    all_pos = dataset.get_pos()
+
+    print('Loading SBERT')
+    from transformers import AutoTokenizer, AutoModel
+    sbert_tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/multi-qa-mpnet-base-dot-v1')
+    sbert_model = AutoModel.from_pretrained('sentence-transformers/multi-qa-mpnet-base-dot-v1')
+    sbert_model = sbert_model.to(device)
+
+    saved_model_data = torch.load('best_model.pt')
+    model = SimpleModel(saved_model_data['config'])
+    model.load_state_dict(saved_model_data['params'])
+
+    while True:
+        if input_from_cmd:
+            sentances = [input('Enter a sentances: ')]
+
+        sentances = [x.split(' ') for x in sentances]
+        embeds, attn_masks = sbert_encode_batched(sbert_model, sbert_tokenizer, [' '.join(x) for x in sentances], 64, verbose=False)
+        embeds_pooled = pool_tokens(sentances, embeds, attn_masks, sbert_tokenizer, verbose=False)
+        with torch.no_grad():
+            new_embeds_out = [model(x) for x in embeds_pooled]
+
+        for i in range(len(sentances)):
+            o = new_embeds_out[i]
+            prob_pos, pred_pos_id = torch.softmax(o, dim=1).max(dim=1)
+            pred_pos = [all_pos[x] for x in pred_pos_id]
+            print('sent', sentances[i])
+            print('pred', pred_pos)
+            print('prob', [str(round(100*x.item()))+'%' for x in prob_pos])
+            print('')
+        if not input_from_cmd:
+            break
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'sbert')
     parser.set_defaults(func=lambda _: parser.print_help())  # in case no argument is passed print help
     root_subparsers = parser.add_subparsers(help="Sub Commands Help")
 
-    # SUBPARSER query gen embeds
+    # SUBPARSER train
     subparser = root_subparsers.add_parser('train', help="Run train pipeline")
     subparser.add_argument("--device", help="Choose device. Default: cpu", default='cpu')
     subparser.add_argument("--epochs", help="# of epochs to train, default: 100", default=100)
     subparser.set_defaults(func=train_pipeline)
+
+    # SUBPARSER inference
+    subparser = root_subparsers.add_parser('inference', help="Run inference pipeline")
+    subparser.add_argument("--device", help="Choose device. Default: cpu", default='cpu')
+    subparser.add_argument("--new_samples", help="the sentances to try, default: input from command line", default=None)
+    subparser.set_defaults(func=inference_pipeline)
 
     # FOR DEBUGGING
     # sys.argv = ['sbert.py']
