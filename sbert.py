@@ -167,6 +167,8 @@ class SimpleModel(torch.nn.Module):
         else:
             for layer in self.layers[:-1]:
                 x = torch.nn.functional.relu(layer(x))
+                if hasattr(self, 'dropout'):
+                    x = self.dropout(x)
             return self.layers[-1](x)
 
 def read_json_prop(prop, filename='sbert.json'):
