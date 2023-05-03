@@ -1,17 +1,15 @@
 
 import os
 
-import nltk
-nltk.data.path.append(os.path.abspath('./nltk_data'))
-
-from nltk.corpus import treebank
-from nltk.parse import RecursiveDescentParser
-from nltk.tag import DefaultTagger, UnigramTagger, BigramTagger, TrigramTagger
-
-from sklearn.model_selection import train_test_split
 
 
 def get_treebank_3914():
+    import nltk
+    nltk.data.path.append(os.path.abspath('./nltk_data'))
+    from nltk.corpus import treebank
+    from sklearn.model_selection import train_test_split
+
+
     sentences = treebank.sents()
     parse_trees = treebank.parsed_sents()
     tagged_sentences = treebank.tagged_sents()
