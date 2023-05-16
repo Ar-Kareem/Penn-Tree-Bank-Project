@@ -57,15 +57,16 @@ def __get_s1_to_s2(s1, s2):
     i = 0
     j = 0
     while i < len(s1) or j < len(s2):
+        s1_i_nospace = s1[i].replace(' ', '')  # biology data has spaces in a single token
         for delta in range(1, len(s2)+1):
-            if s1[i] == __join_s2(s2[j:j+delta]):
+            if s1_i_nospace == __join_s2(s2[j:j+delta]):
                 s1_to_s2[i].extend(range(j, j+delta))
                 # [s2_to_s1.append(i) for _ in range(delta)]
                 i += 1
                 j += delta
                 break
         else:
-            print('ERROR', s1, s2)
+            print('ERROR\n', s1, '\n', s2)
             return {}
     assert i == len(s1) and j == len(s2)
     return s1_to_s2
@@ -92,7 +93,7 @@ def pool_tokens(data, embeds, attn_masks, tokenizer, verbose=True):
         result.append(res)
     return result
 
-def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu'):
+def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu', pos_mapper=None):
     if is_train:
         model.train()
     else:
@@ -107,6 +108,9 @@ def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True,
 
         with torch.set_grad_enabled(is_train):
             out = model(embeds)
+        
+        if pos_mapper is not None:
+            out = pos_mapper(out)
 
         loss = criterion_ce(out, pos_tag)
         metrics['losses'].append(loss.item())

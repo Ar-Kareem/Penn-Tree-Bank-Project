@@ -14,6 +14,7 @@ def get_treebank_3914():
     sentences = treebank.sents()
     parse_trees = treebank.parsed_sents()
     tagged_sentences = treebank.tagged_sents()
+    sentences = [(i, x) for i, x in enumerate(sentences)]
     train_sentences, test_sentences, train_tags, test_tags = train_test_split(sentences, tagged_sentences, test_size=0.2, random_state=42)
 
     # all pos
@@ -23,15 +24,17 @@ def get_treebank_3914():
     all_pos = sorted(list(all_pos))
 
     return {
-        'train_sentences': train_sentences,
-        'test_sentences': test_sentences,
+        'train_sentences': [x[1] for x in train_sentences],
+        'train_ids': [x[0] for x in train_sentences],
+        'test_sentences': [x[1] for x in test_sentences],
+        'test_ids': [x[0] for x in test_sentences],
         'train_tags': train_tags,
         'test_tags': test_tags,
         'all_pos': all_pos,
     }
 
 
-def get_biology():
+def get_biology(limit_train=None, limit_val=None, limit_test=None):
     import json
     train = json.load(open('./.data/biology/biology_data_train.json'))
     val = json.load(open('./.data/biology/biology_data_val.json'))
@@ -41,6 +44,14 @@ def get_biology():
     train = [sent for sent in train if len(sent['data']) > 0]
     val = [sent for sent in val if len(sent['data']) > 0]
     test = [sent for sent in test if len(sent['data']) > 0]
+
+    # limit
+    if limit_train is not None:
+        train = train[:limit_train]
+    if limit_val is not None:
+        val = val[:limit_val]
+    if limit_test is not None:
+        test = test[:limit_test]
 
     # shuffle 
     r = random.Random(42)
