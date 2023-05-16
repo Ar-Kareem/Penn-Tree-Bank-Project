@@ -37,6 +37,11 @@ def get_biology():
     val = json.load(open('./.data/biology/biology_data_val.json'))
     test = json.load(open('./.data/biology/biology_data_test.json'))
 
+    # filter len = 0
+    train = [sent for sent in train if len(sent['data']) > 0]
+    val = [sent for sent in val if len(sent['data']) > 0]
+    test = [sent for sent in test if len(sent['data']) > 0]
+
     # shuffle 
     r = random.Random(42)
     r.shuffle(train)
