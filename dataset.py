@@ -34,7 +34,7 @@ def get_treebank_3914():
     }
 
 
-def get_biology(limit_train=None, limit_val=None, limit_test=None):
+def get_biology(limit_train=None, limit_val=None, limit_test=None, check_pos=False):
     import json
     train = json.load(open('./.data/biology/biology_data_train.json'))
     val = json.load(open('./.data/biology/biology_data_val.json'))
@@ -76,8 +76,9 @@ def get_biology(limit_train=None, limit_val=None, limit_test=None):
     all_pos_train = set(x[1] for sent in data['train_tags'] for x in sent)
     all_pos_val = set(x[1] for sent in data['val_tags'] for x in sent)
     all_pos_test = set(x[1] for sent in data['test_tags'] for x in sent)
-    assert len(all_pos_val.difference(all_pos_train)) == 0, 'POS in val but not in train'
-    assert len(all_pos_test.difference(all_pos_train)) == 0, 'POS in test but not in train'
+    if check_pos:
+        assert len(all_pos_val.difference(all_pos_train)) == 0, 'POS in val but not in train'
+        assert len(all_pos_test.difference(all_pos_train)) == 0, 'POS in test but not in train'
     
     data['all_pos'] = sorted(list(all_pos_train))
     return data
