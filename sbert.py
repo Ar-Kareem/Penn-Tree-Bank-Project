@@ -316,7 +316,7 @@ if __name__ == '__main__':
     subparser.set_defaults(func=inference_pipeline)
 
     # FOR DEBUGGING
-    # sys.argv = ['sbert.py']
+    sys.argv = ['sbert.py', 'inference']
 
     args = parser.parse_args()
     args.func(args)
