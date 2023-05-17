@@ -2,11 +2,37 @@ from flask import Flask
 from flask import request
 from flask import send_from_directory
 
-app = Flask(__name__)
-
+from datetime import datetime
+import logging
 
 import torch
 from .. import sbert
+
+app = Flask(__name__)
+
+logger = logging.getLogger(__name__)
+
+def setup_logger():
+    # suppress werkzeug logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+
+    logger.setLevel(logging.DEBUG)
+    # add timestamp to log
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    # log to file alongside stdout
+    fh = logging.FileHandler('app.log')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    # log to stdout
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+# RUN logger setup
+setup_logger()
+
 
 sbert_model = None
 sbert_tokenizer = None
@@ -32,6 +58,7 @@ def setup():
     saved_model_data = torch.load('../best_model.pt')
     model = sbert.SimpleModel(saved_model_data['config'])
     model.load_state_dict(saved_model_data['params'])
+    model.eval()
 
 # RUN SETUP
 setup()
@@ -63,6 +90,7 @@ def root():
 @app.route('/api/', methods=['POST'])
 def runpos():
     data = request.get_json()['text'].strip()
+    logger.info(str(request.remote_addr) + ' | ' + str(data))
     if len(data) > 1000:
         return {
             'error': 'Text is too long',
