@@ -93,7 +93,7 @@ def pool_tokens(data, embeds, attn_masks, tokenizer, verbose=True):
         result.append(res)
     return result
 
-def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu', pos_mapper=None):
+def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu', pos_mapper=None, skip_pos=None):
     if is_train:
         model.train()
     else:
@@ -136,13 +136,23 @@ def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True,
     return acc
 
 class ListDataset(torch.utils.data.Dataset):
-    def __init__(self, embeds, tags, all_pos):
+    def __init__(self, embeds, tags, all_pos, skip_pos=None):
         self.embeds = embeds
-        self.sents = [[n[0] for n in sent] for sent in tags]
-        self.pos_text = [[n[1] for n in sent] for sent in tags]
-        self.pos_tag = [[all_pos.index(pos) for w,pos in sent] for sent in tags]
-        self.data = list(zip(self.embeds, self.sents, self.pos_text, self.pos_tag))
-
+        if skip_pos is None:
+            self.sents = [[n[0] for n in sent] for sent in tags]
+            self.pos_text = [[n[1] for n in sent] for sent in tags]
+            self.pos_tag = [[all_pos.index(pos) for w,pos in sent] for sent in tags]
+            self.data = list(zip(self.embeds, self.sents, self.pos_text, self.pos_tag))
+        else:
+            for sent in tags:
+                self.sents = []
+                self.pos_text = []
+                self.pos_tag = []
+                for w, pos in sent:
+                    if pos not in skip_pos:
+                        self.sents.append(w)
+                        self.pos_text.append(pos)
+                        self.pos_tag.append(all_pos.index(pos))
         # check that all sentences are consistent
         for i, d in enumerate(self.data):
             assert len(d[0]) == len(d[1]) == len(d[2]) == len(d[3]), (i, (len(d[0]), len(d[1]), len(d[2]), len(d[3])))
