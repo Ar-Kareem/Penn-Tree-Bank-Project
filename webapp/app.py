@@ -51,8 +51,8 @@ def setup():
 
     print('Loading SBERT')
     from transformers import AutoTokenizer, AutoModel
-    sbert_tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/multi-qa-mpnet-base-dot-v1')
-    sbert_model = AutoModel.from_pretrained('sentence-transformers/multi-qa-mpnet-base-dot-v1')
+    sbert_tokenizer = AutoTokenizer.from_pretrained('QCRI/bert-base-multilingual-cased-pos-english')
+    sbert_model = AutoModel.from_pretrained('QCRI/bert-base-multilingual-cased-pos-english')
     sbert_model = sbert_model.to(device)
 
     saved_model_data = torch.load('../best_model.pt')
