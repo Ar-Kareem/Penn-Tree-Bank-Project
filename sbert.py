@@ -93,13 +93,13 @@ def pool_tokens(data, embeds, attn_masks, tokenizer, verbose=True):
         result.append(res)
     return result
 
-def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu', pos_mapper=None, skip_pos=None):
+def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True, device='cpu', pos_mapper=None, skip_pos=None, verbose=True):
     if is_train:
         model.train()
     else:
         model.eval()
     metrics = {'acc_correct': 0, 'total': 0, 'losses': []}
-    pbar = tqdm(dataset)
+    pbar = tqdm(dataset) if verbose else dataset
     for batch_idx, batch in enumerate(pbar):
         embeds, sents, pos_text, pos_tag = zip(*batch)
         embeds = torch.cat(embeds, dim=0).to(device)
@@ -122,7 +122,8 @@ def single_epoch(model, dataset, criterion_ce, epoch, optim=None, is_train=True,
             loss.backward()
             optim.step()
 
-        pbar.set_description(f'{"Train" if is_train else "Val"} Epoch: {epoch} '\
+        if verbose:
+            pbar.set_description(f'{"Train" if is_train else "Val"} Epoch: {epoch} '\
                              f'Acc: {100*metrics["acc_correct"]/metrics["total"]:.1f}% '\
                              f'Loss: {np.mean(metrics["losses"]) :.6f}')
 
@@ -144,15 +145,19 @@ class ListDataset(torch.utils.data.Dataset):
             self.pos_tag = [[all_pos.index(pos) for w,pos in sent] for sent in tags]
             self.data = list(zip(self.embeds, self.sents, self.pos_text, self.pos_tag))
         else:
-            for sent in tags:
-                self.sents = []
-                self.pos_text = []
-                self.pos_tag = []
-                for w, pos in sent:
+            self.sents = [[] for _ in tags]
+            self.pos_text = [[] for _ in tags]
+            self.pos_tag = [[] for _ in tags]
+            embeds_after_skip = [[] for _ in tags]
+            for sent_i, sent in enumerate(tags):
+                for word_i, (word, pos) in enumerate(sent):
                     if pos not in skip_pos:
-                        self.sents.append(w)
-                        self.pos_text.append(pos)
-                        self.pos_tag.append(all_pos.index(pos))
+                        self.sents[sent_i].append(word)
+                        self.pos_text[sent_i].append(pos)
+                        self.pos_tag[sent_i].append(all_pos.index(pos))
+                        embeds_after_skip[sent_i].append(embeds[sent_i][word_i])
+            self.embeds = [torch.stack(l) for l in embeds_after_skip]
+            self.data = list(zip(self.embeds, self.sents, self.pos_text, self.pos_tag))
         # check that all sentences are consistent
         for i, d in enumerate(self.data):
             assert len(d[0]) == len(d[1]) == len(d[2]) == len(d[3]), (i, (len(d[0]), len(d[1]), len(d[2]), len(d[3])))
